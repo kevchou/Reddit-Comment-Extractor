@@ -1,18 +1,25 @@
 #### SQLAlchemy model
-from sqlalchemy.ext.declarative_base
-from sqlalchemy import Column, Date, String, Integer
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Date, String, Integer, Boolean
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 
 Base = declarative_base()
+
+
+
 
 class Submission(Base):
     __tablename__ = 'submissions'
 
     id = Column(String, primary_key=True)
-    date = Column(Date)
     title = Column(String)
+    body = Column(String)
     score = Column(Integer)
     author = Column(String)
     created_date = Column(Date)
+    stickied = Column(Boolean)
 
 class Comments(Base):
     __tablename__ = 'comments'
@@ -22,6 +29,13 @@ class Comments(Base):
     created_date = Column(Date)
     text = Column(String)
     score = Column(Integer)
+
+
+engine = create_engine('sqlite:///redditcomments.db', echo=True)
+Base.metadata.create_all(engine)
+
+Session = sessionmaker(bind=engine)
+session = Session()
 
 
 import praw
@@ -55,7 +69,7 @@ def get_submissions(subreddit, start, end):
     """
     dates = date_range(start, end)
 
-    all_submissions = {}
+    all_submissions = []
     sr = reddit.subreddit(subreddit)
 
     # Gets submission ids of all posts for each day
@@ -63,8 +77,22 @@ def get_submissions(subreddit, start, end):
         day_submissions = sr.submissions(start=dates[i].timestamp(),
                                          end=dates[i+1].timestamp()-1)
 
-        submission_ids = [sub.id for sub in day_submissions]
-        all_submissions[dates[i].strftime("%Y-%m-%d")] = submission_ids 
-        print(f"{dates[i]}: {len(submission_ids)} submissions")
-
+        submission = [Submission(id=sub.id,
+                                  created_date=datetime.fromtimestamp(sub.created_utc),
+                                  title=sub.title,
+                                  body=sub.selftext,
+                                  author=sub.author.name,
+                                  score=sub.score,
+                                  stickied=sub.stickied)
+                       for sub in day_submissions]
+        all_submissions = all_submissions + submission
     return all_submissions
+
+reddit = praw.Reddit(client_id=CLIENT_ID,
+                     client_secret=CLIENT_SECRET,
+                     user_agent='commentextractor by kevchou')
+
+all_submissions = get_submissions('cryptocurrency', '2017-01-01', '2017-01-10')
+
+session.add_all(all_submissions)
+session.commit()
