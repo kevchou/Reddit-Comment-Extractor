@@ -31,54 +31,26 @@ import praw
 from datetime import datetime, timedelta
 from secret import CLIENT_ID, CLIENT_SECRET
 
-def date_range(start, end):
-    """Get list of dates between $start and $end.
-    Inputs: datetime objects or strings formatted as "%Y-%m-%d"
+
+def get_top_submissions(subreddit, reddit, time_filter='all', ):
+    """Get top submissions
     """
-
-    dates = []
-
-    try:
-        start = datetime.strptime(start, "%Y-%m-%d")
-        end = datetime.strptime(end, "%Y-%m-%d")
-    except:
-        pass
-    finally:
-        delta = end - start
-
-        for i in range(delta.days + 1):
-            dates.append(start + timedelta(days=i))
-
-    return dates
-
-
-def get_submissions(subreddit, start, end, reddit):
-    """Get the submission ids for all posts in input $subreddit between
-    input dates, $start and $end
-    """
-    dates = date_range(start, end)
-
-    all_submissions = []
     sr = reddit.subreddit(subreddit)
 
-    # Gets submission ids of all posts for each day
-    for i in range(len(dates) - 1):
-        day_submissions = sr.submissions(start=dates[i].timestamp(), end=dates[i+1].timestamp()-1)
+    day_submissions = sr.top(time_filter=time_filter)
 
-        submissions = [Submission(id=sub.id,
-                                  created_date=datetime.fromtimestamp(sub.created_utc),
-                                  title=sub.title,
-                                  body=sub.selftext,
-                                  author=sub.author.name,
-                                  score=sub.score,
-                                  stickied=sub.stickied)
-                       for sub in day_submissions]
+    submissions = [Submission(id=sub.id,
+                                created_date=datetime.fromtimestamp(sub.created_utc),
+                                title=sub.title,
+                                body=sub.selftext,
+                                author=sub.author.name if sub.author else None,
+                                score=sub.score,
+                                stickied=sub.stickied)
+                    for sub in day_submissions]
 
-        all_submissions = all_submissions + submissions
+    return submissions
 
-    return all_submissions
-
-def get_comments_from_posts(submission_id, reddit):
+def get_comments_for_submission(submission_id, reddit):
     """Input a submission id and returns an array of Comment objects
     """
     submission = reddit.submission(id=submission_id)
@@ -110,7 +82,7 @@ reddit = praw.Reddit(client_id=CLIENT_ID,
                      user_agent='commentextractor by kevchou')
 
 # Get all submissions
-all_submissions = get_submissions('cryptocurrency', '2017-01-01', '2017-12-31', reddit)
+all_submissions = get_top_submissions('news', reddit=reddit)
 
 # Add all submissions to DB
 session.add_all(all_submissions)
@@ -119,7 +91,7 @@ session.commit()
 # Get all comments from every submission and add to DB
 for submission in session.query(Submission).all():
     print(submission.id)
-    comments = get_comments_from_posts(submission.id, reddit)
+    comments = get_comments_for_submission(submission.id, reddit)
     session.add_all(comments)
     session.commit()
 
