@@ -1,36 +1,12 @@
-#### SQLAlchemy model
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Date, String, Integer, Boolean
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-Base = declarative_base()
-
-class Submission(Base):
-    __tablename__ = 'submissions'
-
-    id = Column(String, primary_key=True)
-    title = Column(String)
-    body = Column(String)
-    score = Column(Integer)
-    author = Column(String)
-    created_date = Column(Date)
-    stickied = Column(Boolean)
-
-class Comment(Base):
-    __tablename__ = 'comments'
-
-    id = Column(String, primary_key=True)
-    submission_id = Column(String)
-    author = Column(String)
-    created_date = Column(Date)
-    text = Column(String)
-    score = Column(Integer)
+import models
+from secret import CLIENT_ID, CLIENT_SECRET
 
 import praw
 from datetime import datetime, timedelta
-from secret import CLIENT_ID, CLIENT_SECRET
 
+############################
+# Functions to turn reddit objects into sqlalchemy objects
+# #############################
 
 def get_top_submissions(subreddit, reddit, time_filter='all', ):
     """Get top submissions
@@ -39,7 +15,7 @@ def get_top_submissions(subreddit, reddit, time_filter='all', ):
 
     day_submissions = sr.top(time_filter=time_filter)
 
-    submissions = [Submission(id=sub.id,
+    submissions = [models.Submission(id=sub.id,
                                 created_date=datetime.fromtimestamp(sub.created_utc),
                                 title=sub.title,
                                 body=sub.selftext,
@@ -49,6 +25,7 @@ def get_top_submissions(subreddit, reddit, time_filter='all', ):
                     for sub in day_submissions]
 
     return submissions
+
 
 def get_comments_for_submission(submission_id, reddit):
     """Input a submission id and returns an array of Comment objects
@@ -60,7 +37,7 @@ def get_comments_for_submission(submission_id, reddit):
 
     for c in submission.comments.list():
         if c.body != '[deleted]':
-            comments.append(Comment(id=c.id,
+            comments.append(models.Comment(id=c.id,
                                     submission_id=submission_id,
                                     author=c.author.name if c.author else None,
                                     created_date=datetime.fromtimestamp(c.created_utc),
@@ -69,7 +46,11 @@ def get_comments_for_submission(submission_id, reddit):
     return comments
 
 
+
 # Create SQLAlchemy instances
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 engine = create_engine('sqlite:///redditcomments.db', echo=True)
 Base.metadata.create_all(engine)
 
